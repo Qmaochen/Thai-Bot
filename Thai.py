@@ -236,7 +236,7 @@ if st.session_state.current_idx is not None:
     status_class = "status-due" if "複習" in st.session_state.mode_status else "status-free"
     st.markdown(f'<div style="text-align:center;"><span class="status-badge {status_class}">{st.session_state.mode_status}</span></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    # st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown(f'<span class="tag-badge">{row["Category"]} | Lv.{row["Times"]}</span>', unsafe_allow_html=True)
 
     # ========================================================
