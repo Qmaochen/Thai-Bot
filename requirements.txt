@@ -3,4 +3,5 @@ pandas
 edge-tts
 streamlit-mic-recorder
 rapidfuzz
-streamlit-gsheets
+st-gsheets-connection
+openpyxl
