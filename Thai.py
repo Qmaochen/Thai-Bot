@@ -247,7 +247,7 @@ if st.session_state.current_idx is not None:
         # --- ⌨️ Typing Mode ---
         if 'typing' in mode:
             st.subheader("⌨️ 聽寫挑戰")
-            st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+            st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
             
             with st.form(key='typing_form'):
                 user_input = st.text_input("請輸入泰文...", key="thai_input")
@@ -284,7 +284,7 @@ if st.session_state.current_idx is not None:
                 
             elif mode == 'speaking_sentence_shadowing': 
                 st.markdown("### 🎧 Listen & Repeat")
-                st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+                st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
                 st.caption("請聽音檔，然後唸出來")
 
             st.markdown("---")
@@ -323,10 +323,10 @@ if st.session_state.current_idx is not None:
                 st.markdown(f'<div class="thai-big">{q["thai"]}</div>', unsafe_allow_html=True)
             elif mode == 'word_listen_to_thai':
                 st.markdown("### 🎧 聽到的是哪個字？")
-                st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+                st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
             elif mode == 'sentence_listen_to_meaning':
                 st.markdown("### 🎧 這句話是什麼意思？")
-                st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+                st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
 
             st.write("")
             cols = st.columns(2)
@@ -380,7 +380,7 @@ if st.session_state.current_idx is not None:
             if 'score' in res: st.caption(f"發音分數: {res['score']}")
             
             st.write("🔊 聽聽看標準發音：")
-            st.audio(audio_bytes, format='audio/mp3')
+            st.audio(audio_bytes, format='audio/mpeg')
 
         st.write("")
         if st.button("➡️ 下一題", type="primary", use_container_width=True):
