@@ -193,7 +193,7 @@ if st.session_state.current_idx is None and st.session_state.stage == 'quiz':
     
     # --- Category Logic ---
     if category == 'Char':
-        possible = ['char_pron_to_thai', 'speaking_thai_show', 'char_thai_to_meaning']
+        possible = ['char_pron_to_thai', 'char_thai_to_meaning']
         if current_times > 3: possible.append('char_listening_typing')
         mode = random.choice(possible)
         
@@ -263,7 +263,7 @@ if st.session_state.current_idx is not None:
                     df.at[idx, 'Times'] = current_times + 1
                     df.at[idx, 'Next'] = today + timedelta(days=current_times * 2 + 1)
                 else:
-                    df.at[idx, 'Times'] = 0 
+                    df.at[idx, 'Times'] = current_times
                     df.at[idx, 'Next'] = today
                 
                 save_data(df)
