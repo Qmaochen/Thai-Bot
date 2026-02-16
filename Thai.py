@@ -219,7 +219,6 @@ if st.session_state.current_idx is None and st.session_state.stage == 'quiz':
         
     elif category == 'Sentence':
         possible = ['sentence_listen_to_meaning', 'speaking_sentence_text', 'speaking_sentence_shadowing']
-        if current_times > 0: possible.append('sentence_writing_copy') 
         mode = random.choice(possible)
 
     if mode in ['char_pron_to_thai', 'char_thai_to_meaning', 'word_thai_to_meaning', 'word_listen_to_thai', 'sentence_listen_to_meaning']:
@@ -448,7 +447,7 @@ if st.session_state.current_idx is not None:
 
         if 'user_input' in res: 
             # 如果輸入的是泰文，也一併放大顯示
-            st.markdown(f"<p>你的輸入/狀態:</p><div class='thai-big' style='font-size: 60px !important;'>{res['user_input']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<p>你的輸入/狀態:</p><div class='thai-big' style='font-size: 40px !important;'>{res['user_input']}</div>", unsafe_allow_html=True)
             
         st.write("🔊 聽聽看標準發音：")
         st.audio(audio_bytes, format='audio/mpeg')
