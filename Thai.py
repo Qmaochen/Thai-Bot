@@ -99,9 +99,17 @@ def load_data():
             elif col == 'Next': df[col] = datetime.now().date()
             else: df[col] = ""
     
+    # --- 修正 1：強制文字欄位為字串，避免泰文數字被轉換，也避免 NaN ---
+    text_cols = ['Thai', 'TTS_Text', 'Pronunciation', 'Meaning', 'Category']
+    for col in text_cols:
+        # 將空值填補為空字串，然後強制轉型為 str，最後清掉可能出現的 "nan" 文字
+        df[col] = df[col].fillna("").astype(str).replace(["nan", "None", "<NA>"], "")
+
     df['Times'] = pd.to_numeric(df['Times'], errors='coerce').fillna(0).astype(int)
     df['Next'] = pd.to_datetime(df['Next'], errors='coerce').fillna(pd.Timestamp.now()).dt.date
-    return df.dropna(subset=['Thai'])
+    
+    # 由於 Thai 欄位已變成字串，我們用過濾空字串的方式來取代 dropna
+    return df[df['Thai'].str.strip() != ""]
 
 def save_data(df):
     try:
@@ -378,7 +386,10 @@ if st.session_state.current_idx is not None:
             st.write("")
             cols = st.columns(2)
             for i, opt in enumerate(q['options']):
-                label = opt['Thai'] if mode in ['char_pron_to_thai', 'word_listen_to_thai'] else opt['Meaning']
+                raw_label = opt['Thai'] if mode in ['char_pron_to_thai', 'word_listen_to_thai'] else opt['Meaning']
+                
+                # --- 修正 2：確保按鈕標籤絕對是字串格式 ---
+                label = str(raw_label).strip() if str(raw_label).strip() else "(未填寫)"
                 
                 # 選項按鈕
                 if cols[i%2].button(label, key=f"btn_{i}", use_container_width=True):
