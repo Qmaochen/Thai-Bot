@@ -6,7 +6,15 @@ import asyncio
 import random
 from streamlit_mic_recorder import speech_to_text
 from rapidfuzz import fuzz
-from streamlit_gsheets import GSheetsConnection  # 新增引用
+from streamlit_gsheets import GSheetsConnection  
+
+# === [新增] 引入畫布與 AI 視覺辨識需要的套件 ===
+from streamlit_drawable_canvas import st_canvas
+import google.generativeai as genai
+from PIL import Image
+import json
+import numpy as np
+# ===============================================
 
 # ==========================================
 # 1. UI 設定
@@ -69,16 +77,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# === [新增] 設定左側 API Key 輸入 ===
+with st.sidebar:
+    st.subheader("⚙️ AI 設定")
+    gemini_api_key = st.text_input("Gemini API Key (用於手寫辨識)", type="password")
+    if gemini_api_key:
+        genai.configure(api_key=gemini_api_key)
+    st.markdown("---")
+    if st.button("🔄 Reload Data"):
+        st.session_state.df = load_data()
+        st.session_state.current_idx = None
+        st.session_state.stage = 'quiz'
+        st.rerun()
+# ===============================================
+
 # ==========================================
 # 2. 資料處理 (Google Sheets 版本)
 # ==========================================
 
-# 建立連線物件
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
     try:
-        # 使用 ttl=0 確保每次都讀取最新資料，不使用快取
         df = conn.read(worksheet="Sheet1", ttl=0)
     except Exception as e:
         st.error(f"無法讀取 Google Sheet: {e}")
@@ -93,28 +113,28 @@ def load_data():
             else: df[col] = ""
     
     df['Times'] = pd.to_numeric(df['Times'], errors='coerce').fillna(0).astype(int)
-    # 確保日期格式正確
     df['Next'] = pd.to_datetime(df['Next'], errors='coerce').fillna(pd.Timestamp.now()).dt.date
     return df.dropna(subset=['Thai'])
 
 def save_data(df):
     try:
-        # 將日期轉為字串格式存入 Google Sheet，避免格式錯亂
         save_df = df.copy()
         save_df['Next'] = pd.to_datetime(save_df['Next']).dt.strftime('%Y-%m-%d')
-        
         conn.update(worksheet="Sheet1", data=save_df)
-        st.cache_data.clear() # 清除快取以防萬一
+        st.cache_data.clear() 
     except Exception as e:
         st.error(f"⚠️ 無法存檔至 Google Sheet：{e}")
 
 async def generate_audio(text):
-    communicate = edge_tts.Communicate(text, "th-TH-PremwadeeNeural")
-    audio_data = b""
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            audio_data += chunk["data"]
-    return audio_data
+    try:
+        communicate = edge_tts.Communicate(text, "th-TH-PremwadeeNeural")
+        audio_data = b""
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data += chunk["data"]
+        return audio_data
+    except:
+        return b""
 
 def get_distractors(df, current_row, n=3):
     category = current_row['Category']
@@ -123,31 +143,55 @@ def get_distractors(df, current_row, n=3):
         return pool.sample(len(pool)).to_dict('records')
     return pool.sample(n).to_dict('records')
 
+# === [新增] AI 手寫圖片辨識邏輯 ===
+def evaluate_handwriting(image_array, target_text, meaning):
+    if not gemini_api_key:
+        return {"is_correct": False, "score": 0, "feedback": "⚠️ 尚未輸入 Gemini API Key，無法啟用 AI 老師批改！"}
+    
+    try:
+        # 將 Canvas 的 RGBA 矩陣轉為 RGB 圖片
+        img = Image.fromarray(image_array.astype('uint8'), 'RGBA').convert('RGB')
+        
+        # 呼叫強大的 Flash 視覺模型
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = f"""
+        You are a strict but encouraging Thai language teacher.
+        The user was asked to write the Thai text: "{target_text}" (Meaning: {meaning}).
+        Look at the provided image of their handwriting on the blackboard.
+        
+        Evaluate based on these rules:
+        1. Is it readable and structurally correct? (Minor proportional mistakes are okay, but wrong characters, missing vowels, or reversed writing are not).
+        2. Score from 0 to 100.
+        3. Provide brief, actionable feedback in Traditional Chinese (e.g., '寫得很棒！', '圈圈畫反了', '尾巴太長了').
+        
+        Output ONLY valid JSON in this exact format:
+        {{
+            "is_correct": true,
+            "score": 90,
+            "feedback": "string"
+        }}
+        """
+        response = model.generate_content([prompt, img], generation_config={"temperature": 0.2})
+        # 清理字串以防 JSON 解析失敗
+        text_res = response.text.strip().replace('```json', '').replace('```', '')
+        return json.loads(text_res)
+    except Exception as e:
+        return {"is_correct": False, "score": 0, "feedback": f"系統辨識發生錯誤: {e}"}
+# ===============================================
+
+
 # ==========================================
 # 3. 初始化 Session State
 # ==========================================
-if 'df' not in st.session_state:
-    st.session_state.df = load_data()
-if 'current_idx' not in st.session_state:
-    st.session_state.current_idx = None
-if 'last_idx' not in st.session_state:
-    st.session_state.last_idx = None 
-if 'quiz_data' not in st.session_state:
-    st.session_state.quiz_data = {}
-if 'mode_status' not in st.session_state:
-    st.session_state.mode_status = "" 
-if 'stage' not in st.session_state:
-    st.session_state.stage = 'quiz' # 'quiz' or 'result'
-if 'result_info' not in st.session_state:
-    st.session_state.result_info = {}
+if 'df' not in st.session_state: st.session_state.df = load_data()
+if 'current_idx' not in st.session_state: st.session_state.current_idx = None
+if 'last_idx' not in st.session_state: st.session_state.last_idx = None 
+if 'quiz_data' not in st.session_state: st.session_state.quiz_data = {}
+if 'mode_status' not in st.session_state: st.session_state.mode_status = "" 
+if 'stage' not in st.session_state: st.session_state.stage = 'quiz' 
+if 'result_info' not in st.session_state: st.session_state.result_info = {}
 
 st.title("🇹🇭 Thai Master SRS")
-
-if st.sidebar.button("🔄 Reload Data"):
-    st.session_state.df = load_data()
-    st.session_state.current_idx = None
-    st.session_state.stage = 'quiz'
-    st.rerun()
 
 df = st.session_state.df
 today = datetime.now().date()
@@ -156,12 +200,9 @@ today = datetime.now().date()
 # 4. 邏輯流程
 # ==========================================
 
-# --- A. 選題階段 (Selection Phase) ---
+# --- A. 選題階段 ---
 if st.session_state.current_idx is None and st.session_state.stage == 'quiz':
-    
-    # 1. 找出所有「到期」的題目
     due_indices = df[df['Next'] <= today].index.tolist()
-    
     target_pool = []
     
     if due_indices:
@@ -171,7 +212,6 @@ if st.session_state.current_idx is None and st.session_state.stage == 'quiz':
         target_pool = df.index.tolist()
         st.session_state.mode_status = "🔀 隨機練習模式"
 
-    # 2. 防重複
     if len(target_pool) > 1 and st.session_state.last_idx in target_pool:
         target_pool.remove(st.session_state.last_idx)
     
@@ -183,7 +223,6 @@ if st.session_state.current_idx is None and st.session_state.stage == 'quiz':
     st.session_state.current_idx = idx
     row = df.loc[idx]
     
-    # 3. 決定題型
     tts_text = row['TTS_Text'] if pd.notna(row['TTS_Text']) and str(row['TTS_Text']).strip() != "" else row['Thai']
     category = row['Category']
     current_times = int(row['Times'])
@@ -191,21 +230,25 @@ if st.session_state.current_idx is None and st.session_state.stage == 'quiz':
     mode = ""
     options = []
     
-    # --- Category Logic ---
+    # === [修改] Category Logic: 加入手寫模式 ===
     if category == 'Char':
         possible = ['char_pron_to_thai', 'char_thai_to_meaning']
+        if current_times > 1: possible.append('char_writing_blind') # 盲寫挑戰
         if current_times > 3: possible.append('char_listening_typing')
         mode = random.choice(possible)
         
     elif category == 'Word':
-        possible = ['word_thai_to_meaning', 'speaking_thai_show', 'word_listen_to_thai']
+        possible = ['word_thai_to_meaning', 'word_listen_to_thai']
+        if current_times > 0: possible.append('word_writing_copy')  # 看字照抄挑戰
         if current_times > 3: possible.append('word_listening_typing')
         mode = random.choice(possible)
         
     elif category == 'Sentence':
-        mode = random.choice(['sentence_listen_to_meaning', 'speaking_sentence_text', 'speaking_sentence_shadowing'])
+        possible = ['sentence_listen_to_meaning', 'speaking_sentence_text', 'speaking_sentence_shadowing']
+        if current_times > 0: possible.append('sentence_writing_copy') # 句子照抄挑戰
+        mode = random.choice(possible)
+    # ===============================================
 
-    # 準備選項
     if mode in ['char_pron_to_thai', 'char_thai_to_meaning', 'word_thai_to_meaning', 'word_listen_to_thai', 'sentence_listen_to_meaning']:
         distractors = get_distractors(df, row)
         opts = distractors + [row.to_dict()]
@@ -222,30 +265,80 @@ if st.session_state.current_idx is None and st.session_state.stage == 'quiz':
     }
     st.rerun()
 
-# --- B. 顯示階段 (Display Phase) ---
+# --- B. 顯示階段 ---
 if st.session_state.current_idx is not None:
     idx = st.session_state.current_idx
     row = df.loc[idx]
     q = st.session_state.quiz_data
     mode = q['mode']
     
-    # 生成音檔
     audio_bytes = asyncio.run(generate_audio(q['tts_text']))
 
-    # 顯示狀態
     status_class = "status-due" if "複習" in st.session_state.mode_status else "status-free"
     st.markdown(f'<div style="text-align:center;"><span class="status-badge {status_class}">{st.session_state.mode_status}</span></div>', unsafe_allow_html=True)
-
-    # st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown(f'<span class="tag-badge">{row["Category"]} | Lv.{row["Times"]}</span>', unsafe_allow_html=True)
 
-    # ========================================================
-    #  PART 1: 作答區 (Quiz Stage)
-    # ========================================================
     if st.session_state.stage == 'quiz':
         
-        # --- ⌨️ Typing Mode ---
-        if 'typing' in mode:
+        # === [新增] ✍️ 手寫模式 UI ===
+        if 'writing' in mode:
+            st.subheader("✍️ 手寫黑板挑戰")
+            
+            # 判斷是盲寫還是看寫
+            if mode == 'char_writing_blind':
+                st.markdown("### 請在黑板上默寫出以下字母：")
+                st.markdown(f'<div class="pron-text">{q["pronunciation"]} ({q["meaning"]})</div>', unsafe_allow_html=True)
+                st.audio(audio_bytes, format='audio/mpeg', autoplay=True) # 播個聲音幫助記憶
+            else:
+                st.markdown("### 請照著寫出以下泰文（注意細節）：")
+                st.markdown(f'<div class="thai-big">{q["thai"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="meaning-text">{q["meaning"]}</div>', unsafe_allow_html=True)
+
+            # 建立畫布
+            canvas_result = st_canvas(
+                fill_color="rgba(255, 165, 0, 0.3)", 
+                stroke_width=6,                       # 畫筆粗細
+                stroke_color="#FFFFFF",               # 畫筆白色
+                background_color="#2c3e50",           # 黑板色
+                height=300,                           # 畫布高度
+                width=350,                            # 畫布寬度 (適合手機板)
+                drawing_mode="freedraw",
+                key=f"canvas_{idx}",
+            )
+            
+            st.caption("🖌️ 寫錯了可以使用左下角的橡皮擦或垃圾桶清空重來喔！")
+            
+            if st.button("📤 送出給 AI 老師批改", use_container_width=True):
+                if canvas_result.image_data is not None:
+                    with st.spinner("👀 AI 老師批閱中，請稍候..."):
+                        # 呼叫判斷邏輯
+                        eval_res = evaluate_handwriting(canvas_result.image_data, q['thai'], q['meaning'])
+                        
+                        is_correct = eval_res.get('is_correct', False)
+                        st.session_state.result_info = {
+                            'is_correct': is_correct,
+                            'score': eval_res.get('score', 0),
+                            'feedback': eval_res.get('feedback', '無法取得回饋'),
+                            'user_input': '(已提交手寫圖片)'
+                        }
+                        
+                        # 儲存與計分
+                        if is_correct:
+                            current_times = int(df.at[idx, 'Times'])
+                            df.at[idx, 'Times'] = current_times + 1
+                            df.at[idx, 'Next'] = today + timedelta(days=current_times+1)
+                        else:
+                            df.at[idx, 'Times'] -= 1
+                            df.at[idx, 'Next'] = today
+                        
+                        save_data(df)
+                        st.session_state.stage = 'result'
+                        st.rerun()
+                else:
+                    st.warning("⚠️ 請先在黑板上寫字喔！")
+        # ===============================================
+
+        elif 'typing' in mode:
             st.subheader("⌨️ 聽寫挑戰")
             st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
             
@@ -257,7 +350,6 @@ if st.session_state.current_idx is not None:
                 is_correct = (user_input.strip() == q['thai'].strip())
                 st.session_state.result_info = {'is_correct': is_correct, 'user_input': user_input}
                 
-                # Update Data
                 if is_correct:
                     current_times = int(df.at[idx, 'Times'])
                     df.at[idx, 'Times'] = current_times + 1
@@ -270,7 +362,6 @@ if st.session_state.current_idx is not None:
                 st.session_state.stage = 'result'
                 st.rerun()
 
-        # --- 🎙️ Speaking Mode ---
         elif 'speaking' in mode:
             st.subheader("🎙️ Speaking Challenge")
             
@@ -303,14 +394,13 @@ if st.session_state.current_idx is not None:
                     df.at[idx, 'Times'] = current_times + 1
                     df.at[idx, 'Next'] = today + timedelta(days=current_times * 2 + 1)
                 else:
-                    df.at[idx, 'Times'] = 0
+                    df.at[idx, 'Times'] -= 1
                     df.at[idx, 'Next'] = today
                 
                 save_data(df)
                 st.session_state.stage = 'result'
                 st.rerun()
 
-        # --- 🖱️ Choice Mode ---
         else:
             if mode == 'char_pron_to_thai':
                 st.markdown("### 請選出對應的泰文")
@@ -342,7 +432,7 @@ if st.session_state.current_idx is not None:
                         df.at[idx, 'Times'] = current_times + 1
                         df.at[idx, 'Next'] = today + timedelta(days=current_times * 2 + 1)
                     else:
-                        df.at[idx, 'Times'] = 0
+                        df.at[idx, 'Times'] -= 1
                         df.at[idx, 'Next'] = today
                     
                     save_data(df)
@@ -355,7 +445,7 @@ if st.session_state.current_idx is not None:
     elif st.session_state.stage == 'result':
         res = st.session_state.result_info
         
-        if 'shadowing' in mode or 'listening_typing' in mode:
+        if 'shadowing' in mode or 'listening_typing' in mode or 'writing' in mode:
             st.markdown(f'<div class="thai-big">{q["thai"]}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="meaning-text">{q["meaning"]}</div>', unsafe_allow_html=True)
 
@@ -367,7 +457,6 @@ if st.session_state.current_idx is not None:
                 <p>{q['meaning']} | {q['pronunciation']}</p>
             </div>
             """, unsafe_allow_html=True)
-            if 'score' in res: st.caption(f"發音分數: {res['score']}")
         else:
             st.markdown(f"""
             <div class="result-wrong">
@@ -376,11 +465,21 @@ if st.session_state.current_idx is not None:
                 <p>{q['meaning']} | {q['pronunciation']}</p>
             </div>
             """, unsafe_allow_html=True)
-            if 'user_input' in res: st.write(f"你的輸入: {res['user_input']}")
-            if 'score' in res: st.caption(f"發音分數: {res['score']}")
             
-            st.write("🔊 聽聽看標準發音：")
-            st.audio(audio_bytes, format='audio/mpeg')
+        # === [新增] 顯示手寫/口說分數與回饋 ===
+        if 'score' in res and 'writing' not in mode: 
+            st.caption(f"發音/拼字相似度分數: {res['score']}")
+        elif 'writing' in mode:
+            st.caption(f"📝 筆跡 AI 評分: {res.get('score', 0)} 分")
+            if 'feedback' in res:
+                st.info(f"💡 AI 老師回饋：{res['feedback']}")
+        # =====================================
+
+        if 'user_input' in res and 'writing' not in mode: 
+            st.write(f"你的輸入/辨識結果: {res['user_input']}")
+            
+        st.write("🔊 聽聽看標準發音：")
+        st.audio(audio_bytes, format='audio/mpeg')
 
         st.write("")
         if st.button("➡️ 下一題", type="primary", use_container_width=True):
@@ -389,5 +488,3 @@ if st.session_state.current_idx is not None:
             st.session_state.stage = 'quiz'
             st.session_state.result_info = {}
             st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
