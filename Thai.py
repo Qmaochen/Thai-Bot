@@ -272,7 +272,7 @@ if st.session_state.current_idx is not None:
                 stroke_color="#FFFFFF",               
                 background_color="#2c3e50",           
                 height=300,                           
-                width=350,                            
+                width=700,                            
                 drawing_mode="freedraw",
                 key=f"canvas_{idx}",
             )
@@ -290,7 +290,7 @@ if st.session_state.current_idx is not None:
                 col1, col2 = st.columns(2)
                 
                 if col1.button("✅ 對了！", type="primary", use_container_width=True):
-                    st.session_state.result_info = {'is_correct': True, 'user_input': '(手寫自我批改：正確)'}
+                    st.session_state.result_info = {'is_correct': True, 'user_input': 'ถูกต้อง'}
                     current_times = int(df.at[idx, 'Times'])
                     df.at[idx, 'Times'] = current_times + 1
                     df.at[idx, 'Next'] = today + timedelta(days=current_times+1)
@@ -300,7 +300,7 @@ if st.session_state.current_idx is not None:
                     st.rerun()
                     
                 if col2.button("❌ 錯了...", use_container_width=True):
-                    st.session_state.result_info = {'is_correct': False, 'user_input': '(手寫自我批改：錯誤)'}
+                    st.session_state.result_info = {'is_correct': False, 'user_input': 'ความผิดพลาด'}
                     df.at[idx, 'Times'] -= 1
                     df.at[idx, 'Next'] = today
                     save_data(df)
