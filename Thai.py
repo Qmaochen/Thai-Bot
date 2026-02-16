@@ -99,22 +99,30 @@ def load_data():
             elif col == 'Next': df[col] = datetime.now().date()
             else: df[col] = ""
     
-    # --- 修正 1：強制文字欄位為字串，避免泰文數字被轉換，也避免 NaN ---
     text_cols = ['Thai', 'TTS_Text', 'Pronunciation', 'Meaning', 'Category']
     for col in text_cols:
-        # 將空值填補為空字串，然後強制轉型為 str，最後清掉可能出現的 "nan" 文字
+        # 1. 確保是文字格式且沒有 nan
         df[col] = df[col].fillna("").astype(str).replace(["nan", "None", "<NA>"], "")
+        # 2. 【脫掉防護衣】如果讀取進來的字串開頭有單引號，把它拿掉，才不會影響畫面顯示
+        df[col] = df[col].apply(lambda x: x[1:] if x.startswith("'") else x)
 
     df['Times'] = pd.to_numeric(df['Times'], errors='coerce').fillna(0).astype(int)
     df['Next'] = pd.to_datetime(df['Next'], errors='coerce').fillna(pd.Timestamp.now()).dt.date
     
-    # 由於 Thai 欄位已變成字串，我們用過濾空字串的方式來取代 dropna
     return df[df['Thai'].str.strip() != ""]
 
 def save_data(df):
     try:
         save_df = df.copy()
         save_df['Next'] = pd.to_datetime(save_df['Next']).dt.strftime('%Y-%m-%d')
+        
+        # 【穿上防護衣】在寫入 Google Sheets 之前，強制在文字前面加上單引號 (')
+        # 這會阻止 Google Sheets 把泰文數字轉換成阿拉伯數字
+        text_cols = ['Thai', 'TTS_Text', 'Pronunciation', 'Meaning', 'Category']
+        for col in text_cols:
+            if col in save_df.columns:
+                save_df[col] = save_df[col].astype(str).apply(lambda x: f"'{x}" if not x.startswith("'") else x)
+
         conn.update(worksheet="Sheet1", data=save_df)
         st.cache_data.clear() 
     except Exception as e:
@@ -199,7 +207,7 @@ if st.session_state.current_idx is None and st.session_state.stage == 'quiz':
     
     if category == 'Char':
         possible = ['char_pron_to_thai', 'char_thai_to_meaning']
-        if current_times > 1: possible.append('char_writing_blind')
+        if current_times > 0: possible.append('char_writing_blind')
         if current_times > 3: possible.append('char_listening_typing')
         mode = random.choice(possible)
         
