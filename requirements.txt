@@ -1,7 +1,10 @@
 streamlit
 pandas
+numpy
+st-gsheets-connection
 edge-tts
 streamlit-mic-recorder
 rapidfuzz
-st-gsheets-connection
-openpyxl
+streamlit-drawable-canvas
+google-generativeai
+Pillow
