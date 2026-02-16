@@ -14,7 +14,7 @@ import numpy as np
 # ===============================================
 
 # ==========================================
-# 1. UI 設定
+# 1. UI 設定與 CSS (泰文放大 3 倍版)
 # ==========================================
 st.set_page_config(page_title="Thai Master SRS 🇹🇭", page_icon="🐘", layout="centered")
 
@@ -22,10 +22,12 @@ st.markdown("""
 <style>
     .stApp { background-color: #fdfbf7; }
     
-    .thai-huge { font-size: 60px !important; font-weight: bold; color: #2c3e50; font-family: 'Thonburi', 'Sarabun', sans-serif; text-align: center; margin: 20px 0; }
-    .thai-big { font-size: 40px !important; font-weight: bold; color: #2c3e50; font-family: 'Thonburi', 'Sarabun', sans-serif; text-align: center; }
+    /* 泰文字體放大 3 倍：60px -> 180px, 40px -> 120px */
+    .thai-huge { font-size: 180px !important; font-weight: bold; color: #2c3e50; font-family: 'Thonburi', 'Sarabun', sans-serif; text-align: center; margin: 20px 0; line-height: 1.2; }
+    .thai-big { font-size: 120px !important; font-weight: bold; color: #2c3e50; font-family: 'Thonburi', 'Sarabun', sans-serif; text-align: center; line-height: 1.2; }
+    
     .pron-text { font-size: 24px; color: #e67e22; font-weight: bold; text-align: center; margin-bottom: 10px; }
-    .meaning-text { font-size: 20px; color: #7f8c8d; text-align: center; margin-bottom: 20px; }
+    .meaning-text { font-size: 24px; color: #7f8c8d; text-align: center; margin-bottom: 20px; }
 
     .card { 
         background-color: white; 
@@ -58,32 +60,26 @@ st.markdown("""
     .status-due { background-color: #e74c3c; color: white; }
     .status-free { background-color: #27ae60; color: white; }
     
-    .result-correct { background-color: #d4edda; color: #155724; padding: 20px; border-radius: 10px; margin-top: 20px; }
-    .result-wrong { background-color: #f8d7da; color: #721c24; padding: 20px; border-radius: 10px; margin-top: 20px; }
+    .result-correct { background-color: #d4edda; color: #155724; padding: 20px; border-radius: 10px; margin-top: 20px; text-align: center; }
+    .result-wrong { background-color: #f8d7da; color: #721c24; padding: 20px; border-radius: 10px; margin-top: 20px; text-align: center; }
 
     footer {visibility: hidden;}
     
-    /* 按鈕樣式 */
+    /* 按鈕樣式 (字體從 18px 放大到 45px，方便看清楚泰文選項) */
     .stButton button {
-        height: 60px;
-        font-size: 18px;
+        min-height: 80px;
+        height: auto;
+        font-size: 45px !important; 
         border-radius: 12px;
         font-weight: 500;
         width: 100%;
+        padding: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-with st.sidebar:
-    if st.button("🔄 Reload Data"):
-        st.session_state.df = load_data()
-        st.session_state.current_idx = None
-        st.session_state.stage = 'quiz'
-        st.session_state.show_answer = False # 重置手寫狀態
-        st.rerun()
-
 # ==========================================
-# 2. 資料處理 (Google Sheets 版本)
+# 2. 資料處理函式 (移到前面，讓 Sidebar 找得到)
 # ==========================================
 
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -135,8 +131,16 @@ def get_distractors(df, current_row, n=3):
     return pool.sample(n).to_dict('records')
 
 # ==========================================
-# 3. 初始化 Session State
+# 3. 側邊欄與 Session State 初始化
 # ==========================================
+with st.sidebar:
+    if st.button("🔄 Reload Data"):
+        st.session_state.df = load_data()
+        st.session_state.current_idx = None
+        st.session_state.stage = 'quiz'
+        st.session_state.show_answer = False # 重置手寫狀態
+        st.rerun()
+
 if 'df' not in st.session_state: st.session_state.df = load_data()
 if 'current_idx' not in st.session_state: st.session_state.current_idx = None
 if 'last_idx' not in st.session_state: st.session_state.last_idx = None 
@@ -144,7 +148,7 @@ if 'quiz_data' not in st.session_state: st.session_state.quiz_data = {}
 if 'mode_status' not in st.session_state: st.session_state.mode_status = "" 
 if 'stage' not in st.session_state: st.session_state.stage = 'quiz' 
 if 'result_info' not in st.session_state: st.session_state.result_info = {}
-if 'show_answer' not in st.session_state: st.session_state.show_answer = False # 新增手寫解答狀態
+if 'show_answer' not in st.session_state: st.session_state.show_answer = False 
 
 st.title("🇹🇭 Thai Master SRS")
 
@@ -229,11 +233,11 @@ if st.session_state.current_idx is not None:
 
     status_class = "status-due" if "複習" in st.session_state.mode_status else "status-free"
     st.markdown(f'<div style="text-align:center;"><span class="status-badge {status_class}">{st.session_state.mode_status}</span></div>', unsafe_allow_html=True)
-    st.markdown(f'<span class="tag-badge">{row["Category"]} | Lv.{row["Times"]}</span>', unsafe_allow_html=True)
+    st.markdown(f'<div style="text-align:center;"><span class="tag-badge">{row["Category"]} | Lv.{row["Times"]}</span></div>', unsafe_allow_html=True)
 
     if st.session_state.stage == 'quiz':
         
-        # === [修改] ✍️ 手寫模式 UI (自我批改版本) ===
+        # === ✍️ 手寫模式 UI ===
         if 'writing' in mode:
             st.subheader("✍️ 手寫黑板挑戰 (自我對答)")
             
@@ -269,7 +273,7 @@ if st.session_state.current_idx is not None:
                 
                 col1, col2 = st.columns(2)
                 
-                if col1.button("✅ 我寫對了！", type="primary", use_container_width=True):
+                if col1.button("✅ 對了！", type="primary", use_container_width=True):
                     st.session_state.result_info = {'is_correct': True, 'user_input': '(手寫自我批改：正確)'}
                     current_times = int(df.at[idx, 'Times'])
                     df.at[idx, 'Times'] = current_times + 1
@@ -279,7 +283,7 @@ if st.session_state.current_idx is not None:
                     st.session_state.stage = 'result'
                     st.rerun()
                     
-                if col2.button("❌ 寫錯了...", use_container_width=True):
+                if col2.button("❌ 錯了...", use_container_width=True):
                     st.session_state.result_info = {'is_correct': False, 'user_input': '(手寫自我批改：錯誤)'}
                     df.at[idx, 'Times'] -= 1
                     df.at[idx, 'Next'] = today
@@ -287,8 +291,8 @@ if st.session_state.current_idx is not None:
                     st.session_state.show_answer = False
                     st.session_state.stage = 'result'
                     st.rerun()
-        # ===============================================
 
+        # === ⌨️ 聽寫挑戰 ===
         elif 'typing' in mode:
             st.subheader("⌨️ 聽寫挑戰")
             st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
@@ -313,6 +317,7 @@ if st.session_state.current_idx is not None:
                 st.session_state.stage = 'result'
                 st.rerun()
 
+        # === 🎙️ Speaking Challenge ===
         elif 'speaking' in mode:
             st.subheader("🎙️ Speaking Challenge")
             
@@ -352,6 +357,7 @@ if st.session_state.current_idx is not None:
                 st.session_state.stage = 'result'
                 st.rerun()
 
+        # === 選擇題模式 ===
         else:
             if mode == 'char_pron_to_thai':
                 st.markdown("### 請選出對應的泰文")
@@ -374,6 +380,7 @@ if st.session_state.current_idx is not None:
             for i, opt in enumerate(q['options']):
                 label = opt['Thai'] if mode in ['char_pron_to_thai', 'word_listen_to_thai'] else opt['Meaning']
                 
+                # 選項按鈕
                 if cols[i%2].button(label, key=f"btn_{i}", use_container_width=True):
                     is_correct = (opt['Thai'] == q['thai'])
                     st.session_state.result_info = {'is_correct': is_correct}
@@ -397,14 +404,14 @@ if st.session_state.current_idx is not None:
         res = st.session_state.result_info
         
         if 'shadowing' in mode or 'listening_typing' in mode or 'writing' in mode:
-            st.markdown(f'<div class="thai-big">{q["thai"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="thai-huge">{q["thai"]}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="meaning-text">{q["meaning"]}</div>', unsafe_allow_html=True)
 
         if res['is_correct']:
             st.markdown(f"""
             <div class="result-correct">
                 <h2>✅ 答對了！</h2>
-                <p>標準答案: <b>{q['thai']}</b></p>
+                <div class="thai-big">{q['thai']}</div>
                 <p>{q['meaning']} | {q['pronunciation']}</p>
             </div>
             """, unsafe_allow_html=True)
@@ -412,7 +419,7 @@ if st.session_state.current_idx is not None:
             st.markdown(f"""
             <div class="result-wrong">
                 <h2>❌ 答錯了...</h2>
-                <p>標準答案: <b>{q['thai']}</b></p>
+                <div class="thai-big">{q['thai']}</div>
                 <p>{q['meaning']} | {q['pronunciation']}</p>
             </div>
             """, unsafe_allow_html=True)
@@ -421,7 +428,8 @@ if st.session_state.current_idx is not None:
             st.caption(f"發音/拼字相似度分數: {res['score']}")
 
         if 'user_input' in res: 
-            st.write(f"你的輸入/狀態: {res['user_input']}")
+            # 如果輸入的是泰文，也一併放大顯示
+            st.markdown(f"<p>你的輸入/狀態:</p><div class='thai-big' style='font-size: 60px !important;'>{res['user_input']}</div>", unsafe_allow_html=True)
             
         st.write("🔊 聽聽看標準發音：")
         st.audio(audio_bytes, format='audio/mpeg')
